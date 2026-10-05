@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام الحضور بالـ NFC</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    background: linear-gradient(135deg, #0a1628 0%, #1a2a4a 100%);
+    color: #fff;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  h1 {
+    font-size: 24px;
+    margin-bottom: 8px;
+    text-align: center;
+  }
+  .subtitle {
+    font-size: 14px;
+    color: #8fa3c8;
+    margin-bottom: 32px;
+    text-align: center;
+  }
+  .nfc-circle {
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    background: #1e88e5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 32px;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 0 0 8px rgba(30, 136, 229, 0.2);
+  }
+  .nfc-circle:active { transform: scale(0.95); }
+  .nfc-circle.scanning {
+    animation: pulse 1.5s infinite;
+    background: #4caf50;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 8px rgba(76, 175, 80, 0.2); }
+    50% { box-shadow: 0 0 0 24px rgba(76, 175, 80, 0); }
+  }
+  .nfc-icon {
+    font-size: 80px;
+    color: #fff;
+  }
+  .btn {
+    padding: 16px 32px;
+    border-radius: 12px;
+    border: none;
+    background: #1e88e5;
+    color: #fff;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    width: 100%;
+    max-width: 320px;
+    transition: background 0.2s;
+  }
+  .btn:active { background: #1565c0; }
+  .btn:disabled { background: #555; cursor: not-allowed; }
+  .result-box {
+    margin-top: 24px;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    width: 100%;
+    max-width: 320px;
+    min-height: 60px;
+    text-align: center;
+    font-size: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .result-box.success { background: rgba(76, 175, 80, 0.2); border-color: #4caf50; }
+  .result-box.error { background: rgba(244, 67, 54, 0.2); border-color: #f44336; }
+  .info {
+    margin-top: 24px;
+    font-size: 13px;
+    color: #8fa3c8;
+    text-align: center;
+    max-width: 320px;
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+
+<h1>نظام الحضور بالـ NFC</h1>
+<p class="subtitle">قرّب بطاقة الموظف لتسجيل الحضور</p>
+
+<div class="nfc-circle" id="nfcCircle">
+  <div class="nfc-icon">📶</div>
+</div>
+
+<button class="btn" id="scanBtn">ابدأ المسح</button>
+
+<div class="result-box" id="result">في انتظار البطاقة...</div>
+
+<p class="info">
+  ⚠️ يعمل فقط على Chrome Android مع تفعيل NFC
+</p>
+
+<script>
+const scanBtn = document.getElementById('scanBtn');
+const resultBox = document.getElementById('result');
+const nfcCircle = document.getElementById('nfcCircle');
+
+let isScanning = false;
+
+scanBtn.addEventListener('click', async () => {
+  if (isScanning) return;
+
+  if (!('NDEFReader' in window)) {
+    showResult('❌ المتصفح لا يدعم NFC. استخدم Chrome على أندرويد.', 'error');
+    return;
+  }
+
+  try {
+    const ndef = new NDEFReader();
+    await ndef.scan();
+    isScanning = true;
+    scanBtn.textContent = 'جاري المسح...';
+    scanBtn.disabled = true;
+    nfcCircle.classList.add('scanning');
+    showResult('📡 قرّب البطاقة من ظهر الجوال...', '');
+
+    ndef.onreading = event => {
+      let employeeName = 'غير معروف';
+      
+      for (const record of event.message.records) {
+        if (record.recordType === 'text') {
+          const decoder = new TextDecoder(record.encoding || 'utf-8');
+          employeeName = decoder.decode(record.data);
+        }
+      }
+
+      showResult('✅ مرحباً ' + employeeName + ' — تم تسجيل الحضور', 'success');
+      
+      // إعادة تعيين بعد ثانيتين
+      setTimeout(() => {
+        isScanning = false;
+        scanBtn.textContent = 'ابدأ المسح';
+        scanBtn.disabled = false;
+        nfcCircle.classList.remove('scanning');
+      }, 2000);
+    };
+
+    ndef.onreadingerror = () => {
+      showResult('❌ فشل قراءة البطاقة. جرّب مرة ثانية.', 'error');
+    };
+
+  } catch (err) {
+    showResult('❌ خطأ: ' + err.message, 'error');
+    isScanning = false;
+    scanBtn.textContent = 'ابدأ المسح';
+    scanBtn.disabled = false;
+    nfcCircle.classList.remove('scanning');
+  }
+});
+
+function showResult(text, type) {
+  resultBox.textContent = text;
+  resultBox.className = 'result-box';
+  if (type) resultBox.classList.add(type);
+}
+</script>
+
+</body>
+</html>
